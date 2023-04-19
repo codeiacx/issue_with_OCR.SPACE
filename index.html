@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>OCR.space Demo</title>
+  </head>
+  <body>
+    <h1>OCR.space Demo</h1>
+    <button id="scanButton">Scan Image</button>
+    <div id="cameraPreview"></div>
+    <div id="output"></div>
+
+    <script>
+
+const apiKey = 'my-token';
+
+const scanButton = document.getElementById('scanButton');
+      const cameraPreview = document.getElementById('cameraPreview');
+      const outputDiv = document.getElementById('output');
+      let stream = null;
+      let videoTrack = null;
+
+      scanButton.addEventListener('click', function() {
+        if (!('mediaDevices' in navigator) || !('getUserMedia' in navigator.mediaDevices)) {
+          outputDiv.innerHTML = 'Sorry, your device does not support camera access.';
+          return;
+        }
+
+        
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then(function(_stream) {
+            stream = _stream;
+            const video = document.createElement('video');
+            video.setAttribute('autoplay', '');
+            video.srcObject = stream;
+            cameraPreview.appendChild(video);
+            videoTrack = stream.getVideoTracks()[0];
+
+            const captureButton = document.createElement('button');
+            captureButton.innerText = 'Capture Image';
+            cameraPreview.appendChild(captureButton);
+            captureButton.addEventListener('click', function() {
+              const canvas = document.createElement('canvas');
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              const context = canvas.getContext('2d');
+              context.drawImage(video, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob(function(blob) {
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = function() {
+                  const base64data = canvas.toDataURL();
+
+                  const formData = new FormData();
+                  formData.append('apikey', apiKey);
+                  formData.append('base64Image', base64data);
+
+                  fetch('https://api.ocr.space/parse/image', {
+                    method: 'POST',
+                    body: formData
+                  })
+                    .then(response => response.json())
+                    .then(data => {
+                      if (data.IsErroredOnProcessing) {
+                        outputDiv.innerHTML = `Error: ${data.ErrorMessage}`;
+                      } else {
+                        outputDiv.innerHTML = data.ParsedResults[0].ParsedText;
+                      }
+                    })
+                    .catch(error => {
+                      outputDiv.innerHTML = 'An error occurred while processing the image.';
+                      console.error(error);
+                    });
+                }
+              }, 'image/jpeg');
+            });
+          })
+          .catch(function(error) {
+            outputDiv.innerHTML = 'An error occurred while accessing the camera.';
+            console.error(error);
+          });
+      });
+
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') {
+          if (stream) {
+            videoTrack.stop();
+            stream = null;
+          }
+        }
+      });
+       </script>
+  </body>
+</html>
